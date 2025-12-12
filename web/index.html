@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Persona-aware Evacuation Explorer</title>
+  <style>
+    :root {
+      --bg: #0b1220;
+      --bg2: #0f172a;
+      --accent1: #0ea5e9;
+      --accent2: #6366f1;
+      --text: #e2e8f0;
+      --muted: #94a3b8;
+      --card: rgba(255, 255, 255, 0.04);
+      --border: rgba(255, 255, 255, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Inter", system-ui, -apple-system, sans-serif;
+      color: var(--text);
+      background: radial-gradient(circle at 20% 20%, #1f2a3d 0, #0f172a 40%, #0b1220 80%);
+      padding: 20px;
+    }
+    .hero {
+      padding: 20px 24px;
+      border-radius: 18px;
+      background: linear-gradient(120deg, var(--accent1), var(--accent2));
+      color: #0b1220;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.35);
+    }
+    .hero h1 { margin: 0 0 6px; font-size: 28px; }
+    .hero p { margin: 0; }
+    .pill {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 999px;
+      background: rgba(0,0,0,0.12);
+      margin: 6px 8px 0 0;
+      font-weight: 700;
+      color: #0b1220;
+      font-size: 13px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+      margin-top: 16px;
+    }
+    .stat {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+    }
+    .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+    .stat-value { font-size: 20px; font-weight: 800; color: #fff; }
+    .columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+      gap: 18px;
+      margin-top: 18px;
+    }
+    .section-title { font-size: 18px; font-weight: 800; margin-bottom: 10px; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.2);
+      margin-bottom: 10px;
+    }
+    .persona { color: var(--accent1); font-weight: 800; margin-bottom: 4px; }
+    .question { color: #fff; }
+    .btn {
+      background: linear-gradient(120deg, var(--accent1), var(--accent2));
+      color: #0b1220;
+      padding: 12px 16px;
+      border: none;
+      border-radius: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+      margin-top: 14px;
+    }
+    .btn:active { transform: translateY(1px); }
+    .muted { color: var(--muted); font-size: 14px; }
+    .nav {display:flex; gap:10px; margin-top:16px;}
+    .nav button {background: rgba(255,255,255,0.08); color: #e2e8f0; border: 1px solid var(--border); border-radius: 10px; padding: 10px 14px; cursor: pointer; font-weight: 700;}
+    .nav button.active {background: linear-gradient(120deg, var(--accent1), var(--accent2)); color: #0b1220; border-color: transparent;}
+    .page {display:none; margin-top: 14px;}
+    .page.active {display:block;}
+    .graph-container {background: var(--card); border:1px solid var(--border); border-radius: 12px; padding: 12px; min-height: 420px;}
+    .legend {display:flex; gap:10px; margin-bottom:10px; align-items:center; color: var(--muted); font-size: 13px;}
+    .legend span {display:inline-flex; align-items:center; gap:6px;}
+    .dot {width:12px; height:12px; border-radius: 999px; display:inline-block;}
+    .controls {display:flex; gap:10px; flex-wrap:wrap; margin: 10px 0;}
+    .controls label {color: var(--muted); font-size: 13px;}
+    .controls input[type=checkbox] {margin-right:6px;}
+    .slider {width: 200px;}
+  </style>
+</head>
+<body>
+  <div class="hero">
+    <h1>Persona-aware Evacuation Explorer</h1>
+    <p>Compare raw RAG vs. GNN-informed retrieval for city personas using NYC open data.</p>
+    <div style="margin-top:8px;">
+      <span class="pill">Personas: Emergency/Planner/Health/Social/Transit/Utility</span>
+      <span class="pill">Data: Demographics • ACS • Incidents • Facilities</span>
+      <span class="pill">Model: GraphSAGE + RAG</span>
+    </div>
+  </div>
+
+  <button class="btn" onclick="runLive()">Run live pipeline</button>
+  <button class="btn" style="margin-left:8px;" onclick="loadSample()">Load sample results</button>
+  <span class="muted">Live call hits /api/run; sample stays local.</span>
+
+  <div class="nav">
+    <button id="tab-overview" class="active" onclick="showPage('overview')">Overview</button>
+    <button id="tab-graph" onclick="showPage('graph')">Graph view</button>
+  </div>
+
+  <div class="grid" id="stats"></div>
+
+  <div id="page-overview" class="page active">
+    <div class="columns">
+      <div>
+        <div class="section-title">RAG suggestions</div>
+        <div id="rag"></div>
+      </div>
+      <div>
+        <div class="section-title">GNN-hybrid suggestions</div>
+        <div id="gnn"></div>
+      </div>
+    </div>
+  </div>
+
+  <div id="page-graph" class="page">
+    <div class="section-title">Graph sample (GNN context)</div>
+    <div class="controls">
+      <label><input type="checkbox" id="show-neighborhood" checked>Neighborhoods</label>
+      <label><input type="checkbox" id="show-facility" checked>Facilities</label>
+      <label><input type="checkbox" id="show-incident" checked>Incidents</label>
+      <label>Max edges: <input type="range" id="edge-slider" min="10" max="150" value="60" class="slider"></label>
+    </div>
+    <div class="graph-container">
+      <div class="legend">
+        <span><span class="dot" style="background:#38bdf8;"></span>Neighborhood</span>
+        <span><span class="dot" style="background:#22c55e;"></span>Facility</span>
+        <span><span class="dot" style="background:#f59e0b;"></span>Incident</span>
+      </div>
+      <svg id="graph" width="100%" height="360"></svg>
+    </div>
+  </div>
+
+  <script>
+    let lastGraph = null;
+
+    const sample = {
+      meta: {
+        personas: 6,
+        questions_per_persona: 120,
+        total_examples: 720,
+        graph_nodes: 2000,
+        graph_edges: 4000,
+        embedding_dim: 64
+      },
+      results: {
+        rag: [
+          { persona: "Emergency Manager", question: "Which routes support shelter surge if we lose a key artery?" },
+          { persona: "Utility Ops", question: "How should we prioritize resources for water main breaks under fuel_sites stress?" },
+          { persona: "Utility Ops", question: "Rank facilities for fuel supply considering water_break_rate and capacity." },
+          { persona: "Public Health Officer", question: "How should we prioritize resources for language access under disability_rate stress?" },
+          { persona: "Public Health Officer", question: "How should we prioritize resources for elderly under disability_rate stress?" }
+        ],
+        gnn_hybrid: [
+          { persona: "Utility Ops", question: "Which routes support fuel supply if we lose a key artery?" },
+          { persona: "Public Health Officer", question: "Which routes support language access if we lose a key artery?" },
+          { persona: "Public Health Officer", question: "Where are the top elderly concerns given disability_rate and recent incidents?" },
+          { persona: "Public Health Officer", question: "Which neighborhoods have high clinic proximity risk due to language_isolation?" },
+          { persona: "Public Health Officer", question: "Which routes support language access if we lose a key artery?" }
+        ]
+      },
+      graph_sample: {
+        nodes: [
+          {id:0, type:"neighborhood", value:0.3},
+          {id:1, type:"facility", value:0.5},
+          {id:2, type:"incident", value:1.0},
+          {id:3, type:"facility", value:0.7},
+          {id:4, type:"incident", value:1.0},
+        ],
+        edges: [
+          {source:0, target:1},
+          {source:0, target:2},
+          {source:0, target:3},
+          {source:3, target:4}
+        ]
+      }
+    };
+
+    function renderStats(meta) {
+      const stats = document.getElementById("stats");
+      stats.innerHTML = "";
+      const items = [
+        ["Personas", meta.personas],
+        ["Questions / Persona", meta.questions_per_persona],
+        ["Total Q&A", meta.total_examples],
+        ["Graph Nodes", meta.graph_nodes],
+        ["Graph Edges", meta.graph_edges],
+        ["Embedding Dim", meta.embedding_dim],
+      ];
+      items.forEach(([label, value]) => {
+        const div = document.createElement("div");
+        div.className = "stat";
+        div.innerHTML = `<div class="stat-label">${label}</div><div class="stat-value">${value}</div>`;
+        stats.appendChild(div);
+      });
+    }
+
+    function renderList(id, items) {
+      const el = document.getElementById(id);
+      el.innerHTML = "";
+      items.forEach((hit) => {
+        const card = document.createElement("div");
+        card.className = "card";
+        card.innerHTML = `<div class="persona">${hit.persona}</div><div class="question">${hit.question}</div>`;
+        el.appendChild(card);
+      });
+    }
+
+    function loadSample() {
+      renderStats(sample.meta);
+      renderList("rag", sample.results.rag);
+      renderList("gnn", sample.results.gnn_hybrid);
+      renderGraph(sample.graph_sample);
+    }
+
+    async function runLive() {
+      try {
+        const resp = await fetch("/api/run", { method: "POST" });
+        const data = await resp.json();
+        renderStats(data.meta);
+        renderList("rag", data.results.rag);
+        renderList("gnn", data.results.gnn_hybrid);
+        if (data.graph_sample) {
+          lastGraph = data.graph_sample;
+          renderGraph(data.graph_sample);
+        }
+      } catch (e) {
+        alert("Live run failed; showing sample instead.");
+        loadSample();
+      }
+    }
+
+    function showPage(name) {
+      document.getElementById("page-overview").classList.remove("active");
+      document.getElementById("page-graph").classList.remove("active");
+      document.getElementById(`page-${name}`).classList.add("active");
+      document.getElementById("tab-overview").classList.remove("active");
+      document.getElementById("tab-graph").classList.remove("active");
+      document.getElementById(`tab-${name}`).classList.add("active");
+    }
+
+    function renderGraph(graph) {
+      lastGraph = graph;
+      const svg = d3.select("#graph");
+      svg.selectAll("*").remove();
+      const width = svg.node().getBoundingClientRect().width;
+      const height = +svg.attr("height");
+      const color = (t) => t === "facility" ? "#22c55e" : t === "incident" ? "#f59e0b" : "#38bdf8";
+
+      // Filter nodes/edges based on toggles and edge slider
+      const showN = document.getElementById("show-neighborhood").checked;
+      const showF = document.getElementById("show-facility").checked;
+      const showI = document.getElementById("show-incident").checked;
+      const maxEdges = parseInt(document.getElementById("edge-slider").value, 10);
+
+      const allowed = new Set();
+      graph.nodes.forEach(n => {
+        if ((n.type === "neighborhood" && showN) ||
+            (n.type === "facility" && showF) ||
+            (n.type === "incident" && showI)) {
+          allowed.add(n.id);
+        }
+      });
+      const edges = graph.edges.slice(0, maxEdges).filter(e => allowed.has(e.source) && allowed.has(e.target));
+      const nodes = graph.nodes.filter(n => allowed.has(n.id));
+
+      const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(edges).id(d => d.id).distance(80).strength(0.6))
+        .force("charge", d3.forceManyBody().strength(-120))
+        .force("center", d3.forceCenter(width / 2, height / 2));
+
+      const link = svg.append("g")
+        .attr("stroke", "#475569")
+        .attr("stroke-opacity", 0.6)
+        .selectAll("line")
+        .data(edges)
+        .enter().append("line")
+        .attr("stroke-width", 1.5);
+
+      const node = svg.append("g")
+        .selectAll("circle")
+        .data(nodes)
+        .enter().append("circle")
+        .attr("r", 8)
+        .attr("fill", d => color(d.type))
+        .attr("stroke", "#0b1220")
+        .attr("stroke-width", 1.2)
+        .call(d3.drag()
+          .on("start", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0.3).restart();
+            d.fx = d.x; d.fy = d.y;
+          })
+          .on("drag", (event, d) => {
+            d.fx = event.x; d.fy = event.y;
+          })
+          .on("end", (event, d) => {
+            if (!event.active) simulation.alphaTarget(0);
+            d.fx = null; d.fy = null;
+          })
+        );
+
+      const label = svg.append("g")
+        .selectAll("text")
+        .data(nodes)
+        .enter().append("text")
+        .attr("fill", "#cbd5e1")
+        .attr("font-size", 11)
+        .text(d => `${d.type.slice(0,3)}-${d.id}`);
+
+      simulation.on("tick", () => {
+        link
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+        node
+          .attr("cx", d => d.x)
+          .attr("cy", d => d.y);
+        label
+          .attr("x", d => d.x + 10)
+          .attr("y", d => d.y + 4);
+      });
+    }
+
+    document.getElementById("edge-slider").addEventListener("input", () => { if (lastGraph) renderGraph(lastGraph); });
+    document.getElementById("show-neighborhood").addEventListener("change", () => { if (lastGraph) renderGraph(lastGraph); });
+    document.getElementById("show-facility").addEventListener("change", () => { if (lastGraph) renderGraph(lastGraph); });
+    document.getElementById("show-incident").addEventListener("change", () => { if (lastGraph) renderGraph(lastGraph); });
+
+    // Load sample on page load
+    loadSample();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
+</body>
+</html>
